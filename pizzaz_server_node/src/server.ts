@@ -20,6 +20,7 @@ import {
   type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { WIDGET_HTML_TEMPLATES } from "./widget-templates.js";
 
 type PizzazWidget = {
   id: string;
@@ -30,53 +31,6 @@ type PizzazWidget = {
   html: string;
   responseText: string;
 };
-
-// Inlined HTML templates for each widget
-const WIDGET_HTML_TEMPLATES = {
-  pizzaz: `<!doctype html>
-<html>
-<head>
-  <script type="module" src="http://localhost:4444/pizzaz-2d2b.js"></script>
-  <link rel="stylesheet" href="http://localhost:4444/pizzaz-2d2b.css">
-</head>
-<body>
-  <div id="pizzaz-root"></div>
-</body>
-</html>`,
-  
-  "pizzaz-carousel": `<!doctype html>
-<html>
-<head>
-  <script type="module" src="http://localhost:4444/pizzaz-carousel-2d2b.js"></script>
-  <link rel="stylesheet" href="http://localhost:4444/pizzaz-carousel-2d2b.css">
-</head>
-<body>
-  <div id="pizzaz-carousel-root"></div>
-</body>
-</html>`,
-
-  "pizzaz-albums": `<!doctype html>
-<html>
-<head>
-  <script type="module" src="http://localhost:4444/pizzaz-albums-2d2b.js"></script>
-  <link rel="stylesheet" href="http://localhost:4444/pizzaz-albums-2d2b.css">
-</head>
-<body>
-  <div id="pizzaz-albums-root"></div>
-</body>
-</html>`,
-
-  "pizzaz-list": `<!doctype html>
-<html>
-<head>
-  <script type="module" src="http://localhost:4444/pizzaz-list-2d2b.js"></script>
-  <link rel="stylesheet" href="http://localhost:4444/pizzaz-list-2d2b.css">
-</head>
-<body>
-  <div id="pizzaz-list-root"></div>
-</body>
-</html>`
-} as const;
 
 function getWidgetHtml(componentName: string): string {
   const html = WIDGET_HTML_TEMPLATES[componentName as keyof typeof WIDGET_HTML_TEMPLATES];

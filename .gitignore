@@ -9,6 +9,9 @@ build/
 .vite/
 coverage/
 
+# Auto-generated files
+**/widget-templates.ts
+
 # Logs and caches
 *.log
 pnpm-debug.log
