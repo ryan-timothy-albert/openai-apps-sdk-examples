@@ -1,14 +1,9 @@
-import {
-  createServer,
-  type IncomingMessage,
-  type ServerResponse,
-} from "node:http";
-import fs from "node:fs";
-import path from "node:path";
-import { URL, fileURLToPath } from "node:url";
+import crypto from "node:crypto";
 
+import express from "express";
+import type { Request, Response } from "express";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   CallToolRequestSchema,
   ListResourceTemplatesRequestSchema,
@@ -36,42 +31,59 @@ type PizzazWidget = {
   responseText: string;
 };
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(__dirname, "..", "..");
-const ASSETS_DIR = path.resolve(ROOT_DIR, "assets");
+// Inlined HTML templates for each widget
+const WIDGET_HTML_TEMPLATES = {
+  pizzaz: `<!doctype html>
+<html>
+<head>
+  <script type="module" src="http://localhost:4444/pizzaz-2d2b.js"></script>
+  <link rel="stylesheet" href="http://localhost:4444/pizzaz-2d2b.css">
+</head>
+<body>
+  <div id="pizzaz-root"></div>
+</body>
+</html>`,
+  
+  "pizzaz-carousel": `<!doctype html>
+<html>
+<head>
+  <script type="module" src="http://localhost:4444/pizzaz-carousel-2d2b.js"></script>
+  <link rel="stylesheet" href="http://localhost:4444/pizzaz-carousel-2d2b.css">
+</head>
+<body>
+  <div id="pizzaz-carousel-root"></div>
+</body>
+</html>`,
 
-function readWidgetHtml(componentName: string): string {
-  if (!fs.existsSync(ASSETS_DIR)) {
-    throw new Error(
-      `Widget assets not found. Expected directory ${ASSETS_DIR}. Run "pnpm run build" before starting the server.`
-    );
+  "pizzaz-albums": `<!doctype html>
+<html>
+<head>
+  <script type="module" src="http://localhost:4444/pizzaz-albums-2d2b.js"></script>
+  <link rel="stylesheet" href="http://localhost:4444/pizzaz-albums-2d2b.css">
+</head>
+<body>
+  <div id="pizzaz-albums-root"></div>
+</body>
+</html>`,
+
+  "pizzaz-list": `<!doctype html>
+<html>
+<head>
+  <script type="module" src="http://localhost:4444/pizzaz-list-2d2b.js"></script>
+  <link rel="stylesheet" href="http://localhost:4444/pizzaz-list-2d2b.css">
+</head>
+<body>
+  <div id="pizzaz-list-root"></div>
+</body>
+</html>`
+} as const;
+
+function getWidgetHtml(componentName: string): string {
+  const html = WIDGET_HTML_TEMPLATES[componentName as keyof typeof WIDGET_HTML_TEMPLATES];
+  if (!html) {
+    throw new Error(`Widget HTML template for "${componentName}" not found.`);
   }
-
-  const directPath = path.join(ASSETS_DIR, `${componentName}.html`);
-  let htmlContents: string | null = null;
-
-  if (fs.existsSync(directPath)) {
-    htmlContents = fs.readFileSync(directPath, "utf8");
-  } else {
-    const candidates = fs
-      .readdirSync(ASSETS_DIR)
-      .filter(
-        (file) => file.startsWith(`${componentName}-`) && file.endsWith(".html")
-      )
-      .sort();
-    const fallback = candidates[candidates.length - 1];
-    if (fallback) {
-      htmlContents = fs.readFileSync(path.join(ASSETS_DIR, fallback), "utf8");
-    }
-  }
-
-  if (!htmlContents) {
-    throw new Error(
-      `Widget HTML for "${componentName}" not found in ${ASSETS_DIR}. Run "pnpm run build" to generate the assets.`
-    );
-  }
-
-  return htmlContents;
+  return html;
 }
 
 function widgetMeta(widget: PizzazWidget) {
@@ -91,7 +103,7 @@ const widgets: PizzazWidget[] = [
     templateUri: "ui://widget/pizza-map.html",
     invoking: "Hand-tossing a map",
     invoked: "Served a fresh map",
-    html: readWidgetHtml("pizzaz"),
+    html: getWidgetHtml("pizzaz"),
     responseText: "Rendered a pizza map!",
   },
   {
@@ -100,7 +112,7 @@ const widgets: PizzazWidget[] = [
     templateUri: "ui://widget/pizza-carousel.html",
     invoking: "Carousel some spots",
     invoked: "Served a fresh carousel",
-    html: readWidgetHtml("pizzaz-carousel"),
+    html: getWidgetHtml("pizzaz-carousel"),
     responseText: "Rendered a pizza carousel!",
   },
   {
@@ -109,7 +121,7 @@ const widgets: PizzazWidget[] = [
     templateUri: "ui://widget/pizza-albums.html",
     invoking: "Hand-tossing an album",
     invoked: "Served a fresh album",
-    html: readWidgetHtml("pizzaz-albums"),
+    html: getWidgetHtml("pizzaz-albums"),
     responseText: "Rendered a pizza album!",
   },
   {
@@ -118,7 +130,7 @@ const widgets: PizzazWidget[] = [
     templateUri: "ui://widget/pizza-list.html",
     invoking: "Hand-tossing a list",
     invoked: "Served a fresh list",
-    html: readWidgetHtml("pizzaz-list"),
+    html: getWidgetHtml("pizzaz-list"),
     responseText: "Rendered a pizza list!",
   },
 ];
@@ -132,7 +144,7 @@ widgets.forEach((widget) => {
 });
 
 const toolInputSchema = {
-  type: "object",
+  type: "object" as const,
   properties: {
     pizzaTopping: {
       type: "string",
@@ -141,7 +153,7 @@ const toolInputSchema = {
   },
   required: ["pizzaTopping"],
   additionalProperties: false,
-} as const;
+};
 
 const toolInputParser = z.object({
   pizzaTopping: z.string(),
@@ -263,123 +275,87 @@ function createPizzazServer(): Server {
   return server;
 }
 
-type SessionRecord = {
-  server: Server;
-  transport: SSEServerTransport;
-};
-
-const sessions = new Map<string, SessionRecord>();
-
-const ssePath = "/mcp";
-const postPath = "/mcp/messages";
-
-async function handleSseRequest(res: ServerResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+async function main() {
+  const PORT = process.env.PORT || 3000;
+  const app = express();
   const server = createPizzazServer();
-  const transport = new SSEServerTransport(postPath, res);
-  const sessionId = transport.sessionId;
 
-  sessions.set(sessionId, { server, transport });
-
-  transport.onclose = async () => {
-    sessions.delete(sessionId);
-    await server.close();
-  };
-
-  transport.onerror = (error) => {
-    console.error("SSE transport error", error);
-  };
-
-  try {
-    await server.connect(transport);
-  } catch (error) {
-    sessions.delete(sessionId);
-    console.error("Failed to start SSE session", error);
-    if (!res.headersSent) {
-      res.writeHead(500).end("Failed to establish SSE connection");
-    }
-  }
-}
-
-async function handlePostMessage(
-  req: IncomingMessage,
-  res: ServerResponse,
-  url: URL
-) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "content-type");
-  const sessionId = url.searchParams.get("sessionId");
-
-  if (!sessionId) {
-    res.writeHead(400).end("Missing sessionId query parameter");
-    return;
-  }
-
-  const session = sessions.get(sessionId);
-
-  if (!session) {
-    res.writeHead(404).end("Unknown session");
-    return;
-  }
-
-  try {
-    await session.transport.handlePostMessage(req, res);
-  } catch (error) {
-    console.error("Failed to process message", error);
-    if (!res.headersSent) {
-      res.writeHead(500).end("Failed to process message");
-    }
-  }
-}
-
-const portEnv = Number(process.env.PORT ?? 8000);
-const port = Number.isFinite(portEnv) ? portEnv : 8000;
-
-const httpServer = createServer(
-  async (req: IncomingMessage, res: ServerResponse) => {
-    if (!req.url) {
-      res.writeHead(400).end("Missing URL");
+  // Enable CORS
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") {
+      res.sendStatus(200);
       return;
     }
+    next();
+  });
 
-    const url = new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
+  // GET endpoint for /mcp - not allowed
+  app.get("/mcp", (_req: Request, res: Response) => {
+    res.status(405).json({ error: "Method Not Allowed" });
+  });
 
-    if (
-      req.method === "OPTIONS" &&
-      (url.pathname === ssePath || url.pathname === postPath)
-    ) {
-      res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "content-type",
+  // POST endpoint for /mcp
+  app.post("/mcp", express.json(), async (req: Request, res: Response) => {
+    console.error("Received POST to /mcp");
+
+    try {
+      // Check if this is an initialization request
+      const messages = Array.isArray(req.body) ? req.body : [req.body];
+      const isInitRequest = messages.some((msg) => msg?.method === "initialize");
+
+      // Get or generate session ID
+      let sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+      if (!sessionId && isInitRequest) {
+        // New session - generate ID
+        sessionId = crypto.randomUUID();
+        console.error(`Generated new session ID: ${sessionId}`);
+      } else if (sessionId) {
+        console.error(`Reusing session ID: ${sessionId}`);
+      }
+
+      // Use stateless mode - no session validation
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
       });
-      res.end();
-      return;
+
+      // Manually set the session ID for sticky sessions
+      if (sessionId) {
+        transport.sessionId = sessionId;
+      }
+
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+
+      res.on("close", () => {
+        console.error("Request closed");
+        transport.close();
+      });
+    } catch (error) {
+      console.error("Error handling MCP request:", error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32603,
+            message: "Internal server error",
+          },
+          id: null,
+        });
+      }
     }
+  });
 
-    if (req.method === "GET" && url.pathname === ssePath) {
-      await handleSseRequest(res);
-      return;
-    }
+  app.listen(PORT, () => {
+    console.error(`MCP Demo Server running on http://localhost:${PORT}`);
+    console.error(`StreamableHTTP endpoint: http://localhost:${PORT}/mcp`);
+  });
+}
 
-    if (req.method === "POST" && url.pathname === postPath) {
-      await handlePostMessage(req, res, url);
-      return;
-    }
-
-    res.writeHead(404).end("Not Found");
-  }
-);
-
-httpServer.on("clientError", (err: Error, socket) => {
-  console.error("HTTP client error", err);
-  socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
-});
-
-httpServer.listen(port, () => {
-  console.log(`Pizzaz MCP server listening on http://localhost:${port}`);
-  console.log(`  SSE stream: GET http://localhost:${port}${ssePath}`);
-  console.log(
-    `  Message post endpoint: POST http://localhost:${port}${postPath}?sessionId=...`
-  );
+main().catch((error) => {
+  console.error("Fatal error:", error);
+  process.exit(1);
 });
