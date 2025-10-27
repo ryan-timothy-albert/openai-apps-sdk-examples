@@ -6,9 +6,10 @@
   "description": "Example MCP server that exposes the Pizzaz demo tools using the official TypeScript SDK.",
   "scripts": {
     "build:inline": "tsx scripts/build-inlined.ts",
+    "copy-to:pizza-app-gram": "cp src/mcp-server.ts pizza-app-gram/src/ && cp src/widget-templates.ts pizza-app-gram/src/",
     "prebuild": "npm run build:inline",
     "build": "tsc",
-    "prestart": "npm run build:inline",
+    "prestart": "npm run build:inline && npm run copy:pizza-app-gram",
     "start": "tsx src/server.ts"
   },
   "dependencies": {

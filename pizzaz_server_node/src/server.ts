@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import express from "express";
 import type { Request, Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createPizzazServer } from "./mcp-server.js";
+import { createPizzazServer } from "./mcp-server.ts";
 
 async function main() {
   const PORT = process.env.PORT || 3000;
@@ -14,7 +14,7 @@ async function main() {
   app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Mcp-Protocol-Version");
     if (req.method === "OPTIONS") {
       res.sendStatus(200);
       return;
@@ -50,6 +50,7 @@ async function main() {
       // Use stateless mode - no session validation
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
+        enableJsonResponse: true
       });
 
       // Manually set the session ID for sticky sessions

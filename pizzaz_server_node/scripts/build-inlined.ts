@@ -46,9 +46,6 @@ ${escapedJs}
 
 const widgets = [
   { name: 'pizzaz', rootId: 'pizzaz-root' },
-  { name: 'pizzaz-carousel', rootId: 'pizzaz-carousel-root' },
-  { name: 'pizzaz-albums', rootId: 'pizzaz-albums-root' },
-  { name: 'pizzaz-list', rootId: 'pizzaz-list-root' },
 ];
 
 const templatesCode = widgets.map(widget => 
@@ -58,7 +55,7 @@ const templatesCode = widgets.map(widget =>
 const outputContent = `// Auto-generated file - do not edit manually
 // Generated on ${new Date().toISOString()}
 
-export const WIDGET_HTML_TEMPLATES = {
+export const WIDGET_HTML_TEMPLATES: Record<string, string> = {
 ${templatesCode}
 } as const;
 `;
