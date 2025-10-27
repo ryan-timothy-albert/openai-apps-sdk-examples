@@ -15,7 +15,7 @@ import {
   type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { WIDGET_HTML_TEMPLATES } from "./widget-templates.js";
+import { WIDGET_HTML_TEMPLATES } from "./widget-templates.ts";
 
 type PizzazWidget = {
   id: string;
@@ -40,8 +40,8 @@ function widgetMeta(widget: PizzazWidget) {
     "openai/outputTemplate": widget.templateUri,
     "openai/toolInvocation/invoking": widget.invoking,
     "openai/toolInvocation/invoked": widget.invoked,
-    "openai/widgetAccessible": true,
-    "openai/resultCanProduceWidget": true,
+    "openai/widgetAccessible": "true",
+    "openai/resultCanProduceWidget": "true",
   } as const;
 }
 
