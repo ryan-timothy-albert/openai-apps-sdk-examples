@@ -15,23 +15,24 @@
     "src",
     "dist"
   ],
-  "engine": {
+  "engines": {
     "node": ">=22.18.0"
   },
   "scripts": {
-    "build": "node ./src/build.ts",
+    "dev": "mcp-inspector node ./src/server.ts",
+    "inline:app": "cd .. && tsx scripts/build-inlined.ts",
+    "push": "gf push",
     "prebuild": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run build",
-    "ild": "node ./src/build.ts",
-    "ebuild": "tsc -p tsconfig.json",
-    "epublishOnly": "npm run build"
+    "build": "gf build"
   },
   "dependencies": {
-    "@gram-ai/functions": "^0.5.3",
-    "@modelcontextprotocol/sdk": "^1.19.1",
+    "@gram-ai/functions": "^0.8.1",
+    "@modelcontextprotocol/sdk": "^1.20.1",
     "zod": "^3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/inspector": "^0.17.1",
     "@types/node": "22.x",
     "typescript": "^5"
   }

@@ -1,3 +1,3 @@
 import { createPizzazServer } from "../../src/mcp-server.ts";
 
-export const server = createPizzazServer()
+export const server = createPizzazServer();
